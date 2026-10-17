@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="es-CL">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Asesor Eléctrico</title>
+  <meta name="theme-color" content="#0f172a" />
+  <meta name="description" content="Asistente para mantención y reparación eléctrica conforme a normativa chilena." />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Asesor Elec." />
+  <link rel="stylesheet" href="app.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true">⚡</span>
+      <span class="brand-name">Asesor Eléctrico</span>
+    </div>
+    <div class="status" id="status">
+      <span class="dot" id="net-dot" title="Estado de conexión"></span>
+      <span id="status-text">—</span>
+    </div>
+  </header>
+
+  <main id="view" class="view">
+    <!-- Las vistas se inyectan aquí -->
+  </main>
+
+  <nav class="tabbar" aria-label="Secciones">
+    <button class="tab" data-route="inicio" aria-current="page">
+      <span class="tab-ico">🏠</span><span class="tab-lbl">Inicio</span>
+    </button>
+    <button class="tab" data-route="calculos">
+      <span class="tab-ico">🧮</span><span class="tab-lbl">Cálculos</span>
+    </button>
+    <button class="tab" data-route="normativa">
+      <span class="tab-ico">📖</span><span class="tab-lbl">Normativa</span>
+    </button>
+    <button class="tab" data-route="acerca">
+      <span class="tab-ico">ℹ️</span><span class="tab-lbl">Acerca</span>
+    </button>
+  </nav>
+
+  <script src="config.js"></script>
+  <script src="sync.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
