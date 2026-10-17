@@ -1,5 +1,5 @@
 /* Service worker: la app abre y los cálculos corren sin señal. */
-const CACHE = "asesor-electrico-v0.4.0";
+const CACHE = "asesor-electrico-v0.5.0";
 const ASSETS = [
   "./",
   "./index.html",

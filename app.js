@@ -65,7 +65,7 @@
           <div class="kv"><span>Corriente nominal</span><span>✅ Lista</span></div>
           <div class="kv"><span>Sección por capacidad (RIC N°04)</span><span>✅ Lista</span></div>
           <div class="kv"><span>Caída de tensión (RIC N°03 y N°14)</span><span>✅ Lista</span></div>
-          <div class="kv"><span>Consulta normativa con IA</span><span>⏳ Próxima</span></div>
+          <div class="kv"><span>Consulta normativa con IA</span><span>✅ Lista</span></div>
         </div>`;
     },
 
@@ -285,9 +285,15 @@
       return `
         <button class="back" data-route="inicio">‹ Inicio</button>
         <h1>Consulta a la normativa</h1>
-        <p class="lead">Pregunta en lenguaje normal; la app responderá citando el pliego, punto o tabla exacta, solo desde las fuentes cargadas.</p>
-        <div class="card"><h3>Próxima fase <span class="badge soon">IA</span></h3>
-          <p>Clasificará cada respuesta (exigencia normativa / literatura / fabricante / buena práctica) y dirá cuándo algo no está en las fuentes. Requiere internet y tiene costo por uso.</p></div>`;
+        <p class="lead">Pregunta en lenguaje normal. Responde citando el pliego, punto o tabla exacta, solo desde las fuentes cargadas. Requiere internet y tiene costo por uso.</p>
+        <form id="form-n" class="form">
+          <label>Tu pregunta
+            <textarea name="pregunta" rows="3" placeholder="ej. ¿Cuál es la caída de tensión máxima para un alimentador?" required></textarea>
+          </label>
+          <button type="submit" class="btn" id="n-btn">Consultar</button>
+        </form>
+        <p class="note">Fuentes: Decreto 8, RIC N°03/04/10/14/17 (normativa), guía Bticino (fabricante) y ABC Enríquez Harper (literatura mexicana — verificar contra el RIC).</p>
+        <div id="out-n"></div>`;
     },
 
     acerca() {
@@ -430,6 +436,47 @@
     });
   }
 
+  function setupNormativa() {
+    const form = document.getElementById("form-n");
+    if (!form) return;
+    const out = document.getElementById("out-n");
+    const btn = document.getElementById("n-btn");
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const pregunta = form.pregunta.value.trim();
+      if (!pregunta) return;
+      if (!navigator.onLine) { out.innerHTML = `<div class="card err">Esta consulta necesita internet. Los cálculos sí funcionan sin señal.</div>`; return; }
+      if (!cfg.SUPABASE_URL) { out.innerHTML = `<div class="card err">La consulta aún no está configurada.</div>`; return; }
+      btn.disabled = true; btn.textContent = "Consultando…";
+      out.innerHTML = `<div class="card"><p class="note">Buscando en las fuentes y redactando…</p></div>`;
+      try {
+        const r = await fetch(cfg.SUPABASE_URL + "/functions/v1/consulta", {
+          method: "POST",
+          headers: { "Authorization": "Bearer " + cfg.SUPABASE_ANON_KEY, "Content-Type": "application/json" },
+          body: JSON.stringify({ pregunta })
+        });
+        const j = await r.json();
+        if (!r.ok || j.error) {
+          out.innerHTML = `<div class="card err">${esc(j.error || ("Error " + r.status))}</div>`;
+        } else if (j.debug) {
+          out.innerHTML = `<div class="card err">La llave de IA aún no está configurada en el servidor. Fragmentos encontrados para tu pregunta:</div>` +
+            `<div class="card"><ul>${(j.fuentes || []).map(f => `<li>${esc(f.documento)} · ${esc(f.referencia || ("pág. " + f.pagina))}</li>`).join("")}</ul></div>`;
+        } else {
+          const fuentes = (j.fuentes || []).map(f => `<li>${esc(f.documento)} · ${esc(f.referencia || ("pág. " + (f.pagina ?? "")))} <span class="src-tag">${esc(f.clasificacion)}</span></li>`).join("");
+          out.innerHTML = `
+            <div class="card result">
+              <div class="answer">${esc(j.respuesta)}</div>
+            </div>
+            <div class="card"><h4>Fuentes consultadas</h4><ul class="fuentes">${fuentes}</ul></div>`;
+        }
+      } catch (err) {
+        out.innerHTML = `<div class="card err">No se pudo completar la consulta: ${esc(String(err))}</div>`;
+      } finally {
+        btn.disabled = false; btn.textContent = "Consultar";
+      }
+    });
+  }
+
   // ---------- Router ----------
   const topTabs = { inicio: "inicio", calculos: "calculos", normativa: "normativa", acerca: "acerca" };
   function go(route) {
@@ -443,6 +490,7 @@
     if (r === "calc-b") setupCalcB();
     if (r === "calc-c") setupCalcC();
     if (r === "calc-d") setupCalcD();
+    if (r === "normativa") setupNormativa();
     if (topTabs[r]) { try { Sync.Local.set("lastRoute", r); } catch {} }
   }
 

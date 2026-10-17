@@ -1,19 +1,15 @@
 // Configuración de la app.
-// La sincronización en la nube (Supabase) se activa cuando estos valores estén completos.
-// Mientras estén vacíos, la app funciona 100% offline con almacenamiento local.
 window.APP_CONFIG = {
   // Versión de la app (sirve para refrescar la caché al actualizar).
-  version: "0.4.0",
+  version: "0.5.0",
 
-  // --- Supabase (sincronización teléfono <-> PC) ---
-  // Proyecto creado: asesor-electrico (ref kgbwyvppyowncnrfuwjs, región sa-east-1).
-  // URL del proyecto: https://kgbwyvppyowncnrfuwjs.supabase.co
-  // La conexión se ACTIVA con la primera función que guarde datos: ahí se
-  // rellenan estos campos con la URL + la llave publishable, se crea la tabla
-  // con su RLS y un login simple de usuario único. Mientras tanto: todo offline/local.
-  SUPABASE_URL: "",
-  SUPABASE_ANON_KEY: "",
+  // --- Supabase ---
+  // Proyecto: asesor-electrico (ref kgbwyvppyowncnrfuwjs, región sa-east-1).
+  // La llave anónima es pública por diseño (protegida por RLS; las tablas no son
+  // accesibles directo, solo a través de Edge Functions con rol de servicio).
+  SUPABASE_URL: "https://kgbwyvppyowncnrfuwjs.supabase.co",
+  SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtnYnd5dnBweW93bmNucmZ1d2pzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTIyMTk5NDIsImV4cCI6MjEwNzc5NTk0Mn0.hhV03Wx_MGoccvyFN1S0tOVeply6UFf_cxJkXKDH3dE",
 
-  // Identificador del usuario único (eres tú). No requiere login de otros.
+  // Usuario único (eres tú).
   USER_ID: "carlos"
 };
