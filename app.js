@@ -34,7 +34,7 @@
     return `
       <div class="card result">
         <div class="result-head">${res.headline}</div>
-        <div class="formula">${esc(res.formula)}</div>
+        ${res.formula ? `<div class="formula">${esc(res.formula)}</div>` : ""}
         <h4>Datos usados</h4>
         ${datos}
         <p class="ref">📘 ${esc(res.referencia)}</p>
@@ -73,6 +73,11 @@
       return `
         <h1>Cálculos</h1>
         <p class="lead">Resultado exacto y repetible, con fórmula y referencia normativa. Funcionan sin señal.</p>
+        <button class="tile" data-route="calc-d">
+          <span class="ico">📐</span>
+          <span class="body"><strong>Dimensionar sección (completo)</strong><span>Capacidad + caída de tensión → la que manda</span></span>
+          <span class="chev">›</span>
+        </button>
         <button class="tile" data-route="calc-a">
           <span class="ico">⚡</span>
           <span class="body"><strong>Corriente nominal</strong><span>Monofásica y trifásica</span></span>
@@ -88,6 +93,74 @@
           <span class="body"><strong>Caída de tensión</strong><span>RIC N°03 y N°14</span></span>
           <span class="chev">›</span>
         </button>`;
+    },
+
+    "calc-d"() {
+      const R = window.RIC04;
+      const tipoOpts = Object.entries(R.TIPOS_CABLE).map(([k, v]) => `<option value="${k}">${esc(v.label)}</option>`).join("");
+      const prefill = corrienteGuardada != null ? corrienteGuardada.toFixed(2) : "";
+      const aviso = corrienteGuardada != null
+        ? `<p class="note">Corriente traída del cálculo de corriente nominal: <strong>${prefill} A</strong>. Puedes cambiarla.</p>` : "";
+      return `
+        <button class="back" data-route="calculos">‹ Cálculos</button>
+        <h1>Dimensionar sección</h1>
+        <p class="lead">Calcula por los dos criterios y entrega la sección que sirve: la mayor entre capacidad de corriente y caída de tensión.</p>
+        ${aviso}
+        <form id="form-d" class="form">
+          <label>Sistema
+            <select name="sistema" id="d-sistema">
+              <option value="monofasico">Monofásico</option>
+              <option value="trifasico">Trifásico</option>
+            </select>
+          </label>
+          <label>Corriente de diseño Id [A]
+            <input name="corrienteDiseno_A" type="number" inputmode="decimal" step="any" min="0" value="${prefill}" placeholder="ej. 16" required>
+          </label>
+          <h2>Capacidad de corriente (RIC N°04)</h2>
+          <label>Tipo de cable (temp. de servicio)
+            <select name="tempServicio" id="d-tipo">${tipoOpts}</select>
+          </label>
+          <label>Método de instalación
+            <select name="metodo" id="d-metodo"></select>
+          </label>
+          <label>Temperatura ambiente [°C]
+            <input name="tempAmbiente_C" type="number" inputmode="decimal" step="any" value="30">
+          </label>
+          <label>N° de conductores activos con carga
+            <input name="nConductores" type="number" inputmode="numeric" step="1" min="1" value="2">
+          </label>
+          <h2>Caída de tensión (RIC N°03 / N°14)</h2>
+          <label>Largo del tramo L [m]
+            <input name="longitud_m" type="number" inputmode="decimal" step="any" min="0" placeholder="ej. 25" required>
+          </label>
+          <label>Factor de potencia cosφ
+            <input name="cosphi" type="number" inputmode="decimal" step="any" min="0" max="1" value="1">
+          </label>
+          <label>Tensión nominal [V]
+            <input name="tension_V" id="d-tension" type="number" inputmode="decimal" step="any" min="0" value="230">
+          </label>
+          <label>Conductividad del cobre γ [m/(Ω·mm²)]
+            <input name="gamma" type="number" inputmode="decimal" step="any" min="0" value="56">
+          </label>
+          <label>Normativa aplicable
+            <select name="normativa">
+              <option value="ric03">RIC N°03 (general)</option>
+              <option value="ric14">RIC N°14 (edificio nuevo / eficiencia energética)</option>
+            </select>
+          </label>
+          <label>Tipo de tramo
+            <select name="tipoTramo">
+              <option value="alimentador">Alimentador</option>
+              <option value="subalimentador">Subalimentador</option>
+              <option value="derivacion">Derivación / circuito</option>
+            </select>
+          </label>
+          <label>Caída acumulada aguas arriba [%] (opcional)
+            <input name="acumulada_pct" type="number" inputmode="decimal" step="any" min="0" value="0">
+          </label>
+          <button type="submit" class="btn">Dimensionar</button>
+        </form>
+        <div id="out-d"></div>`;
     },
 
     "calc-a"() {
@@ -325,6 +398,38 @@
     });
   }
 
+  function setupCalcD() {
+    const form = document.getElementById("form-d");
+    if (!form) return;
+    const R = window.RIC04;
+    const selTipo = document.getElementById("d-tipo");
+    const selMet = document.getElementById("d-metodo");
+    const sistema = document.getElementById("d-sistema");
+    const tension = document.getElementById("d-tension");
+    function poblar() {
+      selMet.innerHTML = R.TIPOS_CABLE[selTipo.value].metodos
+        .map(m => `<option value="${m}">${esc(R.METODOS[m])}</option>`).join("");
+    }
+    poblar();
+    selTipo.addEventListener("change", poblar);
+    sistema.addEventListener("change", () => {
+      if (tension.value === "230" || tension.value === "400" || tension.value === "")
+        tension.value = sistema.value === "trifasico" ? "400" : "230";
+    });
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const res = window.Calc.dimensionarSeccion(leerForm(form));
+      if (res.ok) {
+        res.headline = "Sección a usar: " + res.seccionFinal_mm2 + " mm²" + (res.awgFinal !== "—" ? " (AWG " + res.awgFinal + ")" : "");
+        const gtxt = res.gobierna === "capacidad" ? "Manda la capacidad de corriente (RIC N°04)"
+          : res.gobierna === "caida" ? "Manda la caída de tensión"
+          : "Ambos criterios coinciden en la misma sección";
+        res.extraHtml = `<div class="verdict ok">${esc(gtxt)}</div>`;
+      }
+      document.getElementById("out-d").innerHTML = bloqueResultado(res);
+    });
+  }
+
   // ---------- Router ----------
   const topTabs = { inicio: "inicio", calculos: "calculos", normativa: "normativa", acerca: "acerca" };
   function go(route) {
@@ -332,11 +437,12 @@
     view.innerHTML = views[r]();
     window.scrollTo(0, 0);
     // pestaña activa (sub-vistas de cálculo marcan "calculos")
-    const tabRoute = (r === "calc-a" || r === "calc-b" || r === "calc-c") ? "calculos" : r;
+    const tabRoute = (r === "calc-a" || r === "calc-b" || r === "calc-c" || r === "calc-d") ? "calculos" : r;
     tabs.forEach(t => t.setAttribute("aria-current", t.dataset.route === tabRoute ? "page" : "false"));
     if (r === "calc-a") setupCalcA();
     if (r === "calc-b") setupCalcB();
     if (r === "calc-c") setupCalcC();
+    if (r === "calc-d") setupCalcD();
     if (topTabs[r]) { try { Sync.Local.set("lastRoute", r); } catch {} }
   }
 

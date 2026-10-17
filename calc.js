@@ -216,5 +216,51 @@ window.Calc = (function () {
     };
   }
 
-  return { corrienteNominal, seccionPorCapacidad, caidaTension };
+  // ---------- D) Dimensionar sección (combina capacidad + caída de tensión) ----------
+  // La sección a usar es la MAYOR entre la exigida por capacidad (RIC N°04)
+  // y la exigida por caída de tensión (RIC N°03/N°14). Gana el criterio más exigente.
+  function dimensionarSeccion(p) {
+    const resB = seccionPorCapacidad({
+      corrienteDiseno_A: p.corrienteDiseno_A, tempServicio: p.tempServicio,
+      metodo: p.metodo, tempAmbiente_C: p.tempAmbiente_C, nConductores: p.nConductores
+    });
+    const resC = caidaTension({
+      sistema: p.sistema, corriente_A: p.corrienteDiseno_A, longitud_m: p.longitud_m,
+      seccion_mm2: "", cosphi: p.cosphi, tension_V: p.tension_V, gamma: p.gamma,
+      normativa: p.normativa, tipoTramo: p.tipoTramo, acumulada_pct: p.acumulada_pct
+    });
+
+    const errs = [];
+    if (!resB.ok) errs.push(...(resB.errores || ["No se pudo calcular la sección por capacidad."]));
+    if (!resC.ok) errs.push(...(resC.errores || ["No se pudo calcular la sección por caída de tensión."]));
+    if (resC.ok && !resC.seccionMin) errs.push("Ninguna sección tabulada cumple la caída de tensión con estos datos.");
+    if (errs.length) return { ok: false, errores: errs };
+
+    const sCap = resB.seccion_mm2, sCdt = resC.seccionMin.seccion;
+    let gobierna, seccionFinal, awgFinal;
+    if (sCap > sCdt) { gobierna = "capacidad"; seccionFinal = sCap; awgFinal = resB.awg; }
+    else if (sCdt > sCap) { gobierna = "caida"; seccionFinal = sCdt; awgFinal = resC.seccionMin.awg; }
+    else { gobierna = "ambos"; seccionFinal = sCap; awgFinal = resB.awg; }
+
+    const awgCap = resB.awg !== "—" ? " (AWG " + resB.awg + ")" : "";
+    const awgCdt = resC.seccionMin.awg !== "—" ? " (AWG " + resC.seccionMin.awg + ")" : "";
+    const keyCaida = "Por caída de tensión (RIC N°" + (p.normativa === "ric14" ? "14" : "03") + ")";
+    const datos = {
+      "Corriente de diseño Id": Number(p.corrienteDiseno_A).toFixed(2) + " A",
+      "Por capacidad de corriente (RIC N°04)": sCap + " mm²" + awgCap + " · Ic " + resB.Ic_A.toFixed(1) + " A"
+    };
+    datos[keyCaida] = sCdt + " mm²" + awgCdt + " · ΔV " + resC.seccionMin.pct.toFixed(2) + "%";
+
+    return {
+      ok: true,
+      seccionFinal_mm2: seccionFinal, awgFinal,
+      gobierna,
+      porCapacidad: { seccion: sCap, awg: resB.awg, It: resB.It_A, Ic: resB.Ic_A },
+      porCaida: { seccion: sCdt, awg: resC.seccionMin.awg, pct: resC.seccionMin.pct, limObjetivo: resC.limObjetivo },
+      datos,
+      referencia: "Combina RIC N°04 (capacidad, Tablas 4.4/4.6/4.7) y RIC N°03/N°14 (caída de tensión). Exigencia normativa; fórmula de ΔV: literatura técnica."
+    };
+  }
+
+  return { corrienteNominal, seccionPorCapacidad, caidaTension, dimensionarSeccion };
 })();

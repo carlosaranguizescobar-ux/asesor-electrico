@@ -3,7 +3,7 @@
 // Mientras estén vacíos, la app funciona 100% offline con almacenamiento local.
 window.APP_CONFIG = {
   // Versión de la app (sirve para refrescar la caché al actualizar).
-  version: "0.3.1",
+  version: "0.4.0",
 
   // --- Supabase (sincronización teléfono <-> PC) ---
   // Proyecto creado: asesor-electrico (ref kgbwyvppyowncnrfuwjs, región sa-east-1).
