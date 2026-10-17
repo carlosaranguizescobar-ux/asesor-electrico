@@ -172,7 +172,10 @@
             <input name="longitud_m" type="number" inputmode="decimal" step="any" min="0" placeholder="ej. 25" required>
           </label>
           <label>Sección del conductor
-            <select name="seccion_mm2">${secOpts}</select>
+            <select name="seccion_mm2">
+              <option value="">— Calcular la sección mínima —</option>
+              ${secOpts}
+            </select>
           </label>
           <label>Factor de potencia cosφ
             <input name="cosphi" type="number" inputmode="decimal" step="any" min="0" max="1" value="1">
@@ -287,6 +290,18 @@
     form.addEventListener("submit", (e) => {
       e.preventDefault();
       const res = window.Calc.caidaTension(leerForm(form));
+      if (res.ok && res.dimensionar) {
+        if (res.seccionMin) {
+          const sm = res.seccionMin;
+          res.headline = "Sección requerida: " + sm.seccion + " mm²" + (sm.awg !== "—" ? " (AWG " + sm.awg + ")" : "");
+          res.extraHtml = `<div class="verdict ok">✓ Con ${sm.seccion} mm² la caída es ${sm.pct.toFixed(2)}% (límite ${res.limObjetivo.toFixed(2)}%).</div>`;
+        } else {
+          res.headline = "Sin sección que cumpla";
+          res.extraHtml = `<div class="verdict fail">Ninguna sección tabulada (hasta 300 mm²) cumple el límite con estos datos; revisa largo, corriente, tensión o el tramo.</div>`;
+        }
+        document.getElementById("out-c").innerHTML = bloqueResultado(res);
+        return;
+      }
       if (res.ok) {
         const vt = res.okTramo ? "verdict ok" : "verdict fail";
         const vtTxt = res.okTramo ? "✓ cumple" : "✗ no cumple";

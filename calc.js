@@ -128,14 +128,16 @@ window.Calc = (function () {
   // Sección mínima permisible por tipo de tramo (RIC N°03 5.1.2).
   const PISO_SECCION = { alimentador: 4, subalimentador: 2.5, derivacion: 0 };
 
+  // seccion_mm2 vacío/0  ->  modo "dimensionar": la sección es el resultado.
   function caidaTension({ sistema, corriente_A, longitud_m, seccion_mm2, cosphi, tension_V, gamma, normativa, tipoTramo, acumulada_pct }) {
     const errs = [];
-    const I = Number(corriente_A), L = Number(longitud_m), S = Number(seccion_mm2);
+    const I = Number(corriente_A), L = Number(longitud_m);
     const fp = Number(cosphi), V = Number(tension_V), g = Number(gamma);
     const acum = Number(acumulada_pct || 0);
+    const S = Number(seccion_mm2);
+    const dimensionar = !(S > 0); // sin sección elegida -> calcular la mínima
     if (!(I > 0)) errs.push("La corriente debe ser mayor que 0.");
     if (!(L > 0)) errs.push("El largo del tramo debe ser mayor que 0.");
-    if (!(S > 0)) errs.push("La sección debe ser mayor que 0.");
     if (!(fp > 0 && fp <= 1)) errs.push("El factor de potencia debe estar entre 0 y 1.");
     if (!(V > 0)) errs.push("La tensión nominal debe ser mayor que 0.");
     if (!(g > 0)) errs.push("La conductividad γ debe ser mayor que 0.");
@@ -144,34 +146,59 @@ window.Calc = (function () {
 
     const trifasico = sistema === "trifasico";
     const k = trifasico ? Math.sqrt(3) : 2;
-    const dV = (k * L * I * fp) / (g * S);
-    const pct = (dV / V) * 100;
-    const pctTotal = acum + pct;
     const lim = limitesCDT(normativa, tipoTramo);
-
-    // Sección mínima que cumple el límite del tramo (y el piso normativo).
     const piso = PISO_SECCION[tipoTramo] || 0;
+    const formula = trifasico ? "ΔV = √3 · L · I · cosφ / (γ · S)" : "ΔV = 2 · L · I · cosφ / (γ · S)";
+    const pctDe = (Sx) => (k * L * I * fp) / (g * Sx) / V * 100;
+
+    // Límite efectivo para dimensionar: el más estricto entre tramo y lo que deja el total.
+    const margenTotal = lim.limTotal - acum;       // lo que puede caer este tramo sin pasar el total
+    const limObjetivo = Math.min(lim.limTramo, margenTotal);
+
+    // Sección mínima que cumple (y respeta el piso normativo).
     let secMin = null;
     for (let i = 0; i < R.SECCIONES.length; i++) {
       const Sx = R.SECCIONES[i][0];
       if (Sx < piso) continue;
-      const pctx = (k * L * I * fp) / (g * Sx) / V * 100;
-      if (pctx <= lim.limTramo) { secMin = { seccion: Sx, awg: R.SECCIONES[i][1], pct: pctx }; break; }
+      if (pctDe(Sx) <= limObjetivo) { secMin = { seccion: Sx, awg: R.SECCIONES[i][1], pct: pctDe(Sx) }; break; }
     }
 
+    if (dimensionar) {
+      const base = {
+        ok: true, dimensionar: true, seccionMin: secMin,
+        limTramo: lim.limTramo, limTotal: lim.limTotal, limObjetivo,
+        formula,
+        datos: {
+          "Sistema": trifasico ? "Trifásico" : "Monofásico",
+          "Corriente I": I + " A",
+          "Largo del tramo L": L + " m",
+          "Factor de potencia cosφ": fp.toFixed(2),
+          "Tensión nominal": V + " V",
+          "Conductividad γ": g + " m/(Ω·mm²)",
+          "Límite de caída aplicable": limObjetivo.toFixed(2) + " %" + (acum > 0 ? " (tramo " + lim.limTramo + "% y total " + lim.limTotal + "% con " + acum.toFixed(2) + "% aguas arriba)" : "")
+        },
+        refTramo: lim.refTramo, refTotal: lim.refTotal,
+        referencia: "Límite: " + lim.refTramo + " Fórmula de ΔV: literatura técnica estándar (reactancia despreciada)."
+      };
+      if (secMin) {
+        base.datos["Sección mínima"] = secMin.seccion + " mm²" + (secMin.awg !== "—" ? " (AWG " + secMin.awg + ")" : "");
+        base.datos["Caída con esa sección"] = secMin.pct.toFixed(2) + " %";
+      }
+      return base;
+    }
+
+    // Modo verificar una sección elegida.
+    const dV = (k * L * I * fp) / (g * S);
+    const pct = (dV / V) * 100;
+    const pctTotal = acum + pct;
     const okTramo = pct <= lim.limTramo;
     const okTotal = pctTotal <= lim.limTotal;
-
     return {
       ok: true,
-      deltaV_V: dV,
-      pct_tramo: pct,
-      pct_total: pctTotal,
-      limTramo: lim.limTramo,
-      limTotal: lim.limTotal,
-      okTramo, okTotal,
-      seccionMin: secMin,
-      formula: trifasico ? "ΔV = √3 · L · I · cosφ / (γ · S)" : "ΔV = 2 · L · I · cosφ / (γ · S)",
+      deltaV_V: dV, pct_tramo: pct, pct_total: pctTotal,
+      limTramo: lim.limTramo, limTotal: lim.limTotal,
+      okTramo, okTotal, seccionMin: secMin,
+      formula,
       datos: {
         "Sistema": trifasico ? "Trifásico" : "Monofásico",
         "Corriente I": I + " A",
@@ -184,8 +211,7 @@ window.Calc = (function () {
         "Caída del tramo": pct.toFixed(2) + " %",
         ...(acum > 0 ? { "Acumulada aguas arriba": acum.toFixed(2) + " %", "Caída total": pctTotal.toFixed(2) + " %" } : {})
       },
-      refTramo: lim.refTramo,
-      refTotal: lim.refTotal,
+      refTramo: lim.refTramo, refTotal: lim.refTotal,
       referencia: "Límite: " + lim.refTramo + " Fórmula de ΔV: literatura técnica estándar (reactancia despreciada)."
     };
   }
