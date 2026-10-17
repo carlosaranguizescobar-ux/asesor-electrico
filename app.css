@@ -107,6 +107,36 @@ h2 { font-size: 1.05rem; margin: 22px 0 10px; }
 .tab-lbl { font-size: .7rem; }
 .tab[aria-current="page"] { color: var(--accent); }
 
+/* Botón volver */
+.back { background: none; border: none; color: var(--accent); font: inherit; padding: 4px 0 10px; cursor: pointer; }
+
+/* Formularios */
+.form { display: flex; flex-direction: column; gap: 14px; margin-bottom: 8px; }
+.form label { display: flex; flex-direction: column; gap: 6px; font-size: .9rem; color: var(--muted); }
+.form input, .form select {
+  font: inherit; color: var(--text); background: var(--surface);
+  border: 1px solid var(--line); border-radius: 10px; padding: 11px 12px;
+}
+.form input:focus, .form select:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+.btn {
+  font: inherit; font-weight: 700; cursor: pointer;
+  background: var(--accent); color: var(--accent-ink);
+  border: none; border-radius: 10px; padding: 12px 16px; margin-top: 4px;
+}
+.btn.ghost { background: transparent; color: var(--accent); border: 1px solid var(--accent); margin-top: 14px; width: 100%; }
+
+/* Resultado */
+.card.result .result-head { font-size: 1.15rem; font-weight: 700; color: var(--accent); margin-bottom: 10px; }
+.card.result .formula {
+  font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .9rem;
+  background: var(--surface-2); border-radius: 8px; padding: 10px 12px; margin-bottom: 10px;
+}
+.card.result h4 { margin: 10px 0 4px; font-size: .85rem; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; }
+.card.result .ref { margin-top: 12px; font-size: .82rem; color: var(--muted); line-height: 1.5; }
+.card.err { border-color: #7f1d1d; background: #2a1414; }
+.card.err ul { margin: 8px 0 0; padding-left: 18px; }
+.card.err li { margin: 4px 0; font-size: .9rem; }
+
 @media (prefers-color-scheme: light) {
   :root {
     --bg: #f8fafc; --surface: #ffffff; --surface-2: #eef2f7;

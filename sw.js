@@ -1,5 +1,5 @@
 /* Service worker: la app abre y los cálculos corren sin señal. */
-const CACHE = "asesor-electrico-v0.1.0";
+const CACHE = "asesor-electrico-v0.2.0";
 const ASSETS = [
   "./",
   "./index.html",
@@ -7,6 +7,8 @@ const ASSETS = [
   "./app.js",
   "./sync.js",
   "./config.js",
+  "./data-ric04.js",
+  "./calc.js",
   "./manifest.webmanifest",
   "./icon-192.png",
   "./icon-512.png",
