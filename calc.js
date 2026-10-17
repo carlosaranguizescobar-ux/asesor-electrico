@@ -104,5 +104,91 @@ window.Calc = (function () {
     };
   }
 
-  return { corrienteNominal, seccionPorCapacidad };
+  // ---------- C) Caída de tensión ----------
+  // ΔV = k · L · I · cosφ / (γ · S)   (k = 2 monofásico, √3 trifásico)
+  // %ΔV = ΔV / Vnom · 100.  Reactancia despreciada (ámbito viviendas/pequeños locales).
+  // Límites: RIC N°03 5.1.3 (tramo 3%, total 5%) o RIC N°14 5.1 (alimentador 2%, derivación 3%).
+  function limitesCDT(normativa, tipoTramo) {
+    if (normativa === "ric14") {
+      const limTramo = (tipoTramo === "derivacion") ? 3 : 2; // alimentador/subalim 2% (5.1.1), derivación 3% (5.1.2)
+      return {
+        limTramo, limTotal: 3,
+        refTramo: (tipoTramo === "derivacion")
+          ? "RIC N°14 5.1.2 — derivaciones ≤ 3% (punto más desfavorable). Exigencia normativa."
+          : "RIC N°14 5.1.1 — alimentadores ≤ 2% a la carga nominal. Exigencia normativa.",
+        refTotal: "RIC N°14 5.1.2 — ≤ 3% en el punto más desfavorable."
+      };
+    }
+    return {
+      limTramo: 3, limTotal: 5,
+      refTramo: "RIC N°03 5.1.3 — caída del tramo ≤ 3% de la tensión nominal. Exigencia normativa.",
+      refTotal: "RIC N°03 5.1.3 — caída total en el punto más desfavorable ≤ 5%."
+    };
+  }
+  // Sección mínima permisible por tipo de tramo (RIC N°03 5.1.2).
+  const PISO_SECCION = { alimentador: 4, subalimentador: 2.5, derivacion: 0 };
+
+  function caidaTension({ sistema, corriente_A, longitud_m, seccion_mm2, cosphi, tension_V, gamma, normativa, tipoTramo, acumulada_pct }) {
+    const errs = [];
+    const I = Number(corriente_A), L = Number(longitud_m), S = Number(seccion_mm2);
+    const fp = Number(cosphi), V = Number(tension_V), g = Number(gamma);
+    const acum = Number(acumulada_pct || 0);
+    if (!(I > 0)) errs.push("La corriente debe ser mayor que 0.");
+    if (!(L > 0)) errs.push("El largo del tramo debe ser mayor que 0.");
+    if (!(S > 0)) errs.push("La sección debe ser mayor que 0.");
+    if (!(fp > 0 && fp <= 1)) errs.push("El factor de potencia debe estar entre 0 y 1.");
+    if (!(V > 0)) errs.push("La tensión nominal debe ser mayor que 0.");
+    if (!(g > 0)) errs.push("La conductividad γ debe ser mayor que 0.");
+    if (!(acum >= 0)) errs.push("La caída acumulada aguas arriba no puede ser negativa.");
+    if (errs.length) return { ok: false, errores: errs };
+
+    const trifasico = sistema === "trifasico";
+    const k = trifasico ? Math.sqrt(3) : 2;
+    const dV = (k * L * I * fp) / (g * S);
+    const pct = (dV / V) * 100;
+    const pctTotal = acum + pct;
+    const lim = limitesCDT(normativa, tipoTramo);
+
+    // Sección mínima que cumple el límite del tramo (y el piso normativo).
+    const piso = PISO_SECCION[tipoTramo] || 0;
+    let secMin = null;
+    for (let i = 0; i < R.SECCIONES.length; i++) {
+      const Sx = R.SECCIONES[i][0];
+      if (Sx < piso) continue;
+      const pctx = (k * L * I * fp) / (g * Sx) / V * 100;
+      if (pctx <= lim.limTramo) { secMin = { seccion: Sx, awg: R.SECCIONES[i][1], pct: pctx }; break; }
+    }
+
+    const okTramo = pct <= lim.limTramo;
+    const okTotal = pctTotal <= lim.limTotal;
+
+    return {
+      ok: true,
+      deltaV_V: dV,
+      pct_tramo: pct,
+      pct_total: pctTotal,
+      limTramo: lim.limTramo,
+      limTotal: lim.limTotal,
+      okTramo, okTotal,
+      seccionMin: secMin,
+      formula: trifasico ? "ΔV = √3 · L · I · cosφ / (γ · S)" : "ΔV = 2 · L · I · cosφ / (γ · S)",
+      datos: {
+        "Sistema": trifasico ? "Trifásico" : "Monofásico",
+        "Corriente I": I + " A",
+        "Largo del tramo L": L + " m",
+        "Sección S": S + " mm²",
+        "Factor de potencia cosφ": fp.toFixed(2),
+        "Tensión nominal": V + " V",
+        "Conductividad γ": g + " m/(Ω·mm²)",
+        "Caída ΔV": dV.toFixed(2) + " V",
+        "Caída del tramo": pct.toFixed(2) + " %",
+        ...(acum > 0 ? { "Acumulada aguas arriba": acum.toFixed(2) + " %", "Caída total": pctTotal.toFixed(2) + " %" } : {})
+      },
+      refTramo: lim.refTramo,
+      refTotal: lim.refTotal,
+      referencia: "Límite: " + lim.refTramo + " Fórmula de ΔV: literatura técnica estándar (reactancia despreciada)."
+    };
+  }
+
+  return { corrienteNominal, seccionPorCapacidad, caidaTension };
 })();

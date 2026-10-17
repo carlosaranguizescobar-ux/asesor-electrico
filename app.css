@@ -133,6 +133,12 @@ h2 { font-size: 1.05rem; margin: 22px 0 10px; }
 }
 .card.result h4 { margin: 10px 0 4px; font-size: .85rem; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; }
 .card.result .ref { margin-top: 12px; font-size: .82rem; color: var(--muted); line-height: 1.5; }
+.verdict { border-radius: 8px; padding: 10px 12px; margin-top: 10px; font-weight: 600; font-size: .9rem; }
+.verdict small { display: block; font-weight: 400; color: var(--muted); margin-top: 3px; }
+.verdict.ok { background: #0f2e1b; color: #4ade80; border: 1px solid #1e5631; }
+.verdict.fail { background: #2e1414; color: #f87171; border: 1px solid #7f1d1d; }
+.seccion-min { margin-top: 10px; padding: 10px 12px; border-radius: 8px; background: var(--surface-2); font-size: .9rem; }
+.seccion-min small { color: var(--muted); }
 .card.err { border-color: #7f1d1d; background: #2a1414; }
 .card.err ul { margin: 8px 0 0; padding-left: 18px; }
 .card.err li { margin: 4px 0; font-size: .9rem; }

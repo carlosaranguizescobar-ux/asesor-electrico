@@ -64,7 +64,7 @@
           <div class="kv"><span>Instalable y offline</span><span>✅ Sí</span></div>
           <div class="kv"><span>Corriente nominal</span><span>✅ Lista</span></div>
           <div class="kv"><span>Sección por capacidad (RIC N°04)</span><span>✅ Lista</span></div>
-          <div class="kv"><span>Caída de tensión (RIC N°03)</span><span>⏳ Próxima</span></div>
+          <div class="kv"><span>Caída de tensión (RIC N°03 y N°14)</span><span>✅ Lista</span></div>
           <div class="kv"><span>Consulta normativa con IA</span><span>⏳ Próxima</span></div>
         </div>`;
     },
@@ -83,9 +83,10 @@
           <span class="body"><strong>Sección por capacidad de corriente</strong><span>RIC N°04</span></span>
           <span class="chev">›</span>
         </button>
-        <button class="tile" disabled>
+        <button class="tile" data-route="calc-c">
           <span class="ico">📉</span>
-          <span class="body"><strong>Caída de tensión <span class="badge soon">Próxima</span></strong><span>RIC N°03</span></span>
+          <span class="body"><strong>Caída de tensión</strong><span>RIC N°03 y N°14</span></span>
+          <span class="chev">›</span>
         </button>`;
     },
 
@@ -145,6 +146,63 @@
         </form>
         <p class="note">En trifásico el neutro no cuenta como 4° conductor; la tierra de protección nunca cuenta como activo.</p>
         <div id="out-b"></div>`;
+    },
+
+    "calc-c"() {
+      const R = window.RIC04;
+      const secOpts = R.SECCIONES.map(s => `<option value="${s[0]}">${s[0]} mm²${s[1] !== "—" ? " (AWG " + s[1] + ")" : ""}</option>`).join("");
+      const prefill = corrienteGuardada != null ? corrienteGuardada.toFixed(2) : "";
+      const aviso = corrienteGuardada != null
+        ? `<p class="note">Corriente traída del cálculo de corriente nominal: <strong>${prefill} A</strong>. Puedes cambiarla.</p>` : "";
+      return `
+        <button class="back" data-route="calculos">‹ Cálculos</button>
+        <h1>Caída de tensión</h1>
+        ${aviso}
+        <form id="form-c" class="form">
+          <label>Sistema
+            <select name="sistema" id="c-sistema">
+              <option value="monofasico">Monofásico</option>
+              <option value="trifasico">Trifásico</option>
+            </select>
+          </label>
+          <label>Corriente I [A]
+            <input name="corriente_A" type="number" inputmode="decimal" step="any" min="0" value="${prefill}" placeholder="ej. 16" required>
+          </label>
+          <label>Largo del tramo L [m]
+            <input name="longitud_m" type="number" inputmode="decimal" step="any" min="0" placeholder="ej. 25" required>
+          </label>
+          <label>Sección del conductor
+            <select name="seccion_mm2">${secOpts}</select>
+          </label>
+          <label>Factor de potencia cosφ
+            <input name="cosphi" type="number" inputmode="decimal" step="any" min="0" max="1" value="1">
+          </label>
+          <label>Tensión nominal [V]
+            <input name="tension_V" id="c-tension" type="number" inputmode="decimal" step="any" min="0" value="230">
+          </label>
+          <label>Conductividad del cobre γ [m/(Ω·mm²)]
+            <input name="gamma" type="number" inputmode="decimal" step="any" min="0" value="56">
+          </label>
+          <label>Normativa aplicable
+            <select name="normativa">
+              <option value="ric03">RIC N°03 (general)</option>
+              <option value="ric14">RIC N°14 (edificio nuevo / eficiencia energética)</option>
+            </select>
+          </label>
+          <label>Tipo de tramo
+            <select name="tipoTramo">
+              <option value="alimentador">Alimentador</option>
+              <option value="subalimentador">Subalimentador</option>
+              <option value="derivacion">Derivación / circuito</option>
+            </select>
+          </label>
+          <label>Caída acumulada aguas arriba [%] (opcional)
+            <input name="acumulada_pct" type="number" inputmode="decimal" step="any" min="0" value="0">
+          </label>
+          <button type="submit" class="btn">Calcular caída</button>
+        </form>
+        <p class="note">Fórmula de ΔV: literatura técnica (reactancia despreciada, adecuado para viviendas y pequeños locales). Los límites son exigencia normativa.</p>
+        <div id="out-c"></div>`;
     },
 
     normativa() {
@@ -216,6 +274,42 @@
     });
   }
 
+  function setupCalcC() {
+    const form = document.getElementById("form-c");
+    if (!form) return;
+    const sistema = document.getElementById("c-sistema");
+    const tension = document.getElementById("c-tension");
+    sistema.addEventListener("change", () => {
+      // sugiere tensión nominal por defecto al cambiar sistema
+      if (tension.value === "230" || tension.value === "400" || tension.value === "")
+        tension.value = sistema.value === "trifasico" ? "400" : "230";
+    });
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const res = window.Calc.caidaTension(leerForm(form));
+      if (res.ok) {
+        const vt = res.okTramo ? "verdict ok" : "verdict fail";
+        const vtTxt = res.okTramo ? "✓ cumple" : "✗ no cumple";
+        res.headline = "Caída del tramo: " + res.pct_tramo.toFixed(2) + " %";
+        let extra = `<div class="${vt}">Tramo ${vtTxt} el límite de ${res.limTramo}% · <small>${esc(res.refTramo)}</small></div>`;
+        const showTotal = res.pct_total > res.pct_tramo + 1e-9 || res.limTotal !== res.limTramo;
+        if (showTotal) {
+          const vtot = res.okTotal ? "verdict ok" : "verdict fail";
+          const vtotTxt = res.okTotal ? "✓ cumple" : "✗ no cumple";
+          extra += `<div class="${vtot}">Total (${res.pct_total.toFixed(2)}%) ${vtotTxt} el límite de ${res.limTotal}% · <small>${esc(res.refTotal)}</small></div>`;
+        }
+        if (res.seccionMin) {
+          const sm = res.seccionMin;
+          extra += `<div class="seccion-min">Sección mínima para cumplir ${res.limTramo}%: <strong>${sm.seccion} mm²</strong>${sm.awg !== "—" ? " (AWG " + sm.awg + ")" : ""} <small>(ΔV ${sm.pct.toFixed(2)}%)</small></div>`;
+        } else {
+          extra += `<div class="verdict fail">Ninguna sección tabulada cumple el límite con estos datos; revisa largo, corriente o tensión.</div>`;
+        }
+        res.extraHtml = extra;
+      }
+      document.getElementById("out-c").innerHTML = bloqueResultado(res);
+    });
+  }
+
   // ---------- Router ----------
   const topTabs = { inicio: "inicio", calculos: "calculos", normativa: "normativa", acerca: "acerca" };
   function go(route) {
@@ -223,10 +317,11 @@
     view.innerHTML = views[r]();
     window.scrollTo(0, 0);
     // pestaña activa (sub-vistas de cálculo marcan "calculos")
-    const tabRoute = (r === "calc-a" || r === "calc-b") ? "calculos" : r;
+    const tabRoute = (r === "calc-a" || r === "calc-b" || r === "calc-c") ? "calculos" : r;
     tabs.forEach(t => t.setAttribute("aria-current", t.dataset.route === tabRoute ? "page" : "false"));
     if (r === "calc-a") setupCalcA();
     if (r === "calc-b") setupCalcB();
+    if (r === "calc-c") setupCalcC();
     if (topTabs[r]) { try { Sync.Local.set("lastRoute", r); } catch {} }
   }
 
