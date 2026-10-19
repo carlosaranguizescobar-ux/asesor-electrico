@@ -64,6 +64,11 @@
           <span class="body"><strong>Componentes</strong><span>Selector guiado: diferencial, automático, enchufes…</span></span>
           <span class="chev">›</span>
         </button>
+        <button class="tile" data-route="foto">
+          <span class="ico">📷</span>
+          <span class="body"><strong>Reconocer por foto</strong><span>Sube una foto y recibe lectura + norma citada</span></span>
+          <span class="chev">›</span>
+        </button>
         <h2>Estado de esta versión</h2>
         <div class="card">
           <div class="kv"><span>Base de la app (Bloque 1)</span><span>✅ Lista</span></div>
@@ -71,6 +76,7 @@
           <div class="kv"><span>Cálculos (corriente, demanda, sección, caída, puesta a tierra)</span><span>✅ Listos</span></div>
           <div class="kv"><span>Consulta normativa con IA</span><span>✅ Lista</span></div>
           <div class="kv"><span>Componentes (selector guiado)</span><span>✅ Listo</span></div>
+          <div class="kv"><span>Reconocer por foto (Bloque 4)</span><span>✅ Listo</span></div>
         </div>`;
     },
 
@@ -374,6 +380,27 @@
         <p class="note">Las respuestas salen de los pliegos cargados. Requiere internet y tiene costo por uso.</p>`;
     },
 
+    foto() {
+      return `
+        <button class="back" data-route="inicio">‹ Inicio</button>
+        <h1>Reconocer por foto</h1>
+        <p class="lead">Sube o toma una foto de la situación. La IA te da una <strong>lectura</strong> de lo que ve y la orienta con la norma citada. Requiere internet y tiene costo por uso.</p>
+        <label class="foto-drop" for="foto-input">
+          <span class="ico">📷</span>
+          <span>Tomar o elegir una foto</span>
+          <input id="foto-input" type="file" accept="image/*" capture="environment" hidden>
+        </label>
+        <div id="foto-preview"></div>
+        <form id="form-foto" class="form">
+          <label>Nota (opcional)
+            <textarea id="foto-nota" rows="2" placeholder="ej. el diferencial salta al conectar el calefont"></textarea>
+          </label>
+          <button type="submit" class="btn" id="foto-btn" disabled>Analizar foto</button>
+        </form>
+        <p class="note">La foto se envía solo para analizarla; no se guarda en el servidor. La lectura de la IA es orientativa, no un diagnóstico; la exigencia normativa va citada desde los pliegos.</p>
+        <div id="out-foto"></div>`;
+    },
+
     acerca() {
       return `
         <h1>Acerca</h1>
@@ -636,6 +663,81 @@
     });
   }
 
+  function setupFoto() {
+    const input = document.getElementById("foto-input");
+    const preview = document.getElementById("foto-preview");
+    const form = document.getElementById("form-foto");
+    const btn = document.getElementById("foto-btn");
+    const out = document.getElementById("out-foto");
+    if (!input || !form) return;
+    let imagenB64 = null; // base64 sin prefijo
+
+    input.addEventListener("change", () => {
+      const file = input.files && input.files[0];
+      if (!file) return;
+      out.innerHTML = "";
+      const reader = new FileReader();
+      reader.onload = () => {
+        const img = new Image();
+        img.onload = () => {
+          const max = 1280;
+          let w = img.width, h = img.height;
+          if (w > max || h > max) { const s = max / Math.max(w, h); w = Math.round(w * s); h = Math.round(h * s); }
+          const canvas = document.createElement("canvas");
+          canvas.width = w; canvas.height = h;
+          canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+          const dataUrl = canvas.toDataURL("image/jpeg", 0.8);
+          imagenB64 = dataUrl.split(",")[1];
+          preview.innerHTML = `<img class="foto-img" src="${dataUrl}" alt="vista previa">`;
+          btn.disabled = false;
+        };
+        img.onerror = () => { out.innerHTML = `<div class="card err">No se pudo leer la imagen.</div>`; };
+        img.src = reader.result;
+      };
+      reader.readAsDataURL(file);
+    });
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      if (!imagenB64) { out.innerHTML = `<div class="card err">Primero elige una foto.</div>`; return; }
+      if (!navigator.onLine) { out.innerHTML = `<div class="card err">Esta función necesita internet. Los cálculos sí funcionan sin señal.</div>`; return; }
+      const nota = document.getElementById("foto-nota").value.trim();
+      btn.disabled = true; btn.textContent = "Analizando…";
+      out.innerHTML = `<div class="card"><p class="note">Observando la foto…</p></div>`;
+      try {
+        const r = await fetch(cfg.SUPABASE_URL + "/functions/v1/vision", {
+          method: "POST",
+          headers: { "Authorization": "Bearer " + cfg.SUPABASE_ANON_KEY, "Content-Type": "application/json" },
+          body: JSON.stringify({ imagen: imagenB64, media_type: "image/jpeg", nota })
+        });
+        const j = await r.json();
+        if (!r.ok || j.error) {
+          out.innerHTML = `<div class="card err">${esc(j.error || ("Error " + r.status))}</div>`;
+        } else {
+          const obs = esc(j.observacion || "No se pudo obtener una lectura de la foto.");
+          out.innerHTML = `<div class="card result"><h4>Observación de la IA · lectura de la foto, no diagnóstico</h4><div class="answer">${obs}</div></div>`;
+          const q = (j.consulta || "").trim();
+          if (q && j.es_electrico !== false) {
+            const label = document.createElement("p");
+            label.className = "note"; label.textContent = "Orientación según la norma:";
+            out.appendChild(label);
+            const sub = document.createElement("div");
+            out.appendChild(sub);
+            await consultarYrender(q, sub);
+          } else if (j.es_electrico === false) {
+            const note = document.createElement("div");
+            note.className = "card";
+            note.innerHTML = `<p class="note">La foto no parece de una instalación o componente eléctrico, así que no busqué en la norma.</p>`;
+            out.appendChild(note);
+          }
+        }
+      } catch (err) {
+        out.innerHTML = `<div class="card err">No se pudo analizar la foto: ${esc(String(err))}</div>`;
+      }
+      btn.disabled = false; btn.textContent = "Analizar foto";
+    });
+  }
+
   // ---------- Router ----------
   const topTabs = { inicio: "inicio", calculos: "calculos", normativa: "normativa", acerca: "acerca" };
   function go(route) {
@@ -644,7 +746,7 @@
     window.scrollTo(0, 0);
     // pestaña activa (sub-vistas de cálculo marcan "calculos")
     const tabRoute = (r === "calc-a" || r === "calc-b" || r === "calc-c" || r === "calc-d" || r === "calc-e" || r === "calc-f") ? "calculos"
-      : (r === "componentes") ? "inicio" : r;
+      : (r === "componentes" || r === "foto") ? "inicio" : r;
     tabs.forEach(t => t.setAttribute("aria-current", t.dataset.route === tabRoute ? "page" : "false"));
     if (r === "calc-a") setupCalcA();
     if (r === "calc-e") setupCalcE();
@@ -654,6 +756,7 @@
     if (r === "calc-f") setupCalcF();
     if (r === "normativa") setupNormativa();
     if (r === "componentes") setupComponentes();
+    if (r === "foto") setupFoto();
     if (topTabs[r]) { try { Sync.Local.set("lastRoute", r); } catch {} }
   }
 

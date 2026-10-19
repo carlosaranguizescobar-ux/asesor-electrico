@@ -1,5 +1,5 @@
 /* Service worker: red primero (actualiza solo cuando hay internet), caché como respaldo offline. */
-const CACHE = "asesor-electrico-v0.7.2";
+const CACHE = "asesor-electrico-v0.8.0";
 const ASSETS = [
   "./",
   "./index.html",
