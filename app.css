@@ -123,6 +123,14 @@ h2 { font-size: 1.05rem; margin: 22px 0 10px; }
 ul.fuentes { margin: 6px 0 0; padding-left: 18px; }
 ul.fuentes li { margin: 5px 0; font-size: .85rem; }
 .src-tag { color: var(--muted); font-size: .75rem; }
+.q-btn {
+  display: block; width: 100%; text-align: left; margin-top: 8px;
+  font: inherit; font-size: .9rem; color: var(--text);
+  background: var(--surface-2); border: 1px solid var(--line);
+  border-radius: 10px; padding: 10px 12px; cursor: pointer; line-height: 1.4;
+}
+.q-btn:active { background: var(--line); }
+.q-btn::before { content: "› "; color: var(--accent); font-weight: 700; }
 .btn {
   font: inherit; font-weight: 700; cursor: pointer;
   background: var(--accent); color: var(--accent-ink);

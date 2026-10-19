@@ -1,7 +1,7 @@
 // Configuración de la app.
 window.APP_CONFIG = {
   // Versión de la app (sirve para refrescar la caché al actualizar).
-  version: "0.6.1",
+  version: "0.7.0",
 
   // --- Supabase ---
   // Proyecto: asesor-electrico (ref kgbwyvppyowncnrfuwjs, región sa-east-1).

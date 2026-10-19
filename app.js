@@ -59,14 +59,18 @@
           <span class="body"><strong>Consulta a la normativa</strong><span>Pregunta y recibe la cita del pliego exacto</span></span>
           <span class="chev">›</span>
         </button>
+        <button class="tile" data-route="componentes">
+          <span class="ico">🧰</span>
+          <span class="body"><strong>Componentes</strong><span>Selector guiado: diferencial, automático, enchufes…</span></span>
+          <span class="chev">›</span>
+        </button>
         <h2>Estado de esta versión</h2>
         <div class="card">
           <div class="kv"><span>Base de la app (Bloque 1)</span><span>✅ Lista</span></div>
           <div class="kv"><span>Instalable y offline</span><span>✅ Sí</span></div>
-          <div class="kv"><span>Corriente nominal</span><span>✅ Lista</span></div>
-          <div class="kv"><span>Sección por capacidad (RIC N°04)</span><span>✅ Lista</span></div>
-          <div class="kv"><span>Caída de tensión (RIC N°03 y N°14)</span><span>✅ Lista</span></div>
+          <div class="kv"><span>Cálculos (corriente, demanda, sección, caída)</span><span>✅ Listos</span></div>
           <div class="kv"><span>Consulta normativa con IA</span><span>✅ Lista</span></div>
+          <div class="kv"><span>Componentes (selector guiado)</span><span>✅ Listo</span></div>
         </div>`;
     },
 
@@ -321,6 +325,21 @@
         <div id="out-n"></div>`;
     },
 
+    componentes() {
+      const grupos = COMPONENTES.map((g) => `
+        <div class="card">
+          <h3>${g.ico} ${esc(g.cat)}</h3>
+          ${g.preguntas.map((q) => `<button class="q-btn" data-pregunta="${esc(q)}">${esc(q)}</button>`).join("")}
+        </div>`).join("");
+      return `
+        <button class="back" data-route="inicio">‹ Inicio</button>
+        <h1>Componentes — selector guiado</h1>
+        <p class="lead">Elige una duda frecuente y la app responde citando la norma (o avisa si no está en las fuentes).</p>
+        <div id="cmp-list">${grupos}</div>
+        <div id="out-cmp"></div>
+        <p class="note">Las respuestas salen de los pliegos cargados. Requiere internet y tiene costo por uso.</p>`;
+    },
+
     acerca() {
       return `
         <h1>Acerca</h1>
@@ -477,6 +496,33 @@
     });
   }
 
+  // Helper compartido: consulta la normativa y renderiza en 'out'.
+  async function consultarYrender(pregunta, out) {
+    if (!navigator.onLine) { out.innerHTML = `<div class="card err">Esta consulta necesita internet. Los cálculos sí funcionan sin señal.</div>`; return; }
+    if (!cfg.SUPABASE_URL) { out.innerHTML = `<div class="card err">La consulta aún no está configurada.</div>`; return; }
+    out.innerHTML = `<div class="card"><p class="note">Buscando en las fuentes y redactando…</p></div>`;
+    try {
+      const r = await fetch(cfg.SUPABASE_URL + "/functions/v1/consulta", {
+        method: "POST",
+        headers: { "Authorization": "Bearer " + cfg.SUPABASE_ANON_KEY, "Content-Type": "application/json" },
+        body: JSON.stringify({ pregunta })
+      });
+      const j = await r.json();
+      if (!r.ok || j.error) {
+        out.innerHTML = `<div class="card err">${esc(j.error || ("Error " + r.status))}</div>`;
+      } else if (j.debug) {
+        out.innerHTML = `<div class="card err">La llave de IA aún no está configurada en el servidor.</div>`;
+      } else {
+        const fuentes = (j.fuentes || []).map(f => `<li>${esc(f.documento)} · ${esc(f.referencia || ("pág. " + (f.pagina ?? "")))} <span class="src-tag">${esc(f.clasificacion)}</span></li>`).join("");
+        out.innerHTML = `
+          <div class="card result"><div class="answer">${esc(j.respuesta)}</div></div>
+          <div class="card"><h4>Fuentes consultadas</h4><ul class="fuentes">${fuentes}</ul></div>`;
+      }
+    } catch (err) {
+      out.innerHTML = `<div class="card err">No se pudo completar la consulta: ${esc(String(err))}</div>`;
+    }
+  }
+
   function setupNormativa() {
     const form = document.getElementById("form-n");
     if (!form) return;
@@ -486,35 +532,43 @@
       e.preventDefault();
       const pregunta = form.pregunta.value.trim();
       if (!pregunta) return;
-      if (!navigator.onLine) { out.innerHTML = `<div class="card err">Esta consulta necesita internet. Los cálculos sí funcionan sin señal.</div>`; return; }
-      if (!cfg.SUPABASE_URL) { out.innerHTML = `<div class="card err">La consulta aún no está configurada.</div>`; return; }
       btn.disabled = true; btn.textContent = "Consultando…";
-      out.innerHTML = `<div class="card"><p class="note">Buscando en las fuentes y redactando…</p></div>`;
-      try {
-        const r = await fetch(cfg.SUPABASE_URL + "/functions/v1/consulta", {
-          method: "POST",
-          headers: { "Authorization": "Bearer " + cfg.SUPABASE_ANON_KEY, "Content-Type": "application/json" },
-          body: JSON.stringify({ pregunta })
-        });
-        const j = await r.json();
-        if (!r.ok || j.error) {
-          out.innerHTML = `<div class="card err">${esc(j.error || ("Error " + r.status))}</div>`;
-        } else if (j.debug) {
-          out.innerHTML = `<div class="card err">La llave de IA aún no está configurada en el servidor. Fragmentos encontrados para tu pregunta:</div>` +
-            `<div class="card"><ul>${(j.fuentes || []).map(f => `<li>${esc(f.documento)} · ${esc(f.referencia || ("pág. " + f.pagina))}</li>`).join("")}</ul></div>`;
-        } else {
-          const fuentes = (j.fuentes || []).map(f => `<li>${esc(f.documento)} · ${esc(f.referencia || ("pág. " + (f.pagina ?? "")))} <span class="src-tag">${esc(f.clasificacion)}</span></li>`).join("");
-          out.innerHTML = `
-            <div class="card result">
-              <div class="answer">${esc(j.respuesta)}</div>
-            </div>
-            <div class="card"><h4>Fuentes consultadas</h4><ul class="fuentes">${fuentes}</ul></div>`;
-        }
-      } catch (err) {
-        out.innerHTML = `<div class="card err">No se pudo completar la consulta: ${esc(String(err))}</div>`;
-      } finally {
-        btn.disabled = false; btn.textContent = "Consultar";
-      }
+      await consultarYrender(pregunta, out);
+      btn.disabled = false; btn.textContent = "Consultar";
+    });
+  }
+
+  // Selector guiado de componentes: preguntas frecuentes que se responden desde las fuentes.
+  const COMPONENTES = [
+    { cat: "Protección diferencial", ico: "🛡️", preguntas: [
+      "¿Cuándo se exige protección diferencial y de qué sensibilidad (mA) en viviendas?",
+      "¿Qué circuitos deben protegerse con diferencial?" ] },
+    { cat: "Protección automática (sobrecorriente)", ico: "🔘", preguntas: [
+      "¿Cómo se dimensiona la protección automática respecto a la capacidad del conductor?",
+      "¿Qué dispositivo de protección debe llevar cada alimentador o circuito?" ] },
+    { cat: "Enchufes y salidas", ico: "🔌", preguntas: [
+      "¿Qué exige la norma para los enchufes en viviendas?",
+      "¿Qué tipo de enchufes y protección se requiere en zonas húmedas o baños?" ] },
+    { cat: "Conductores", ico: "➰", preguntas: [
+      "¿Qué tipos de conductor permite la norma y para qué uso?",
+      "¿Qué colores de aislación corresponden a fase, neutro y tierra?" ] },
+    { cat: "Canalizaciones", ico: "🧱", preguntas: [
+      "¿Qué sistemas de canalización permite la norma?",
+      "¿Qué porcentaje de ocupación de un ducto o bandeja se permite?" ] },
+    { cat: "Puesta a tierra", ico: "⏚", preguntas: [
+      "¿Qué exige la norma sobre la puesta a tierra de protección?",
+      "¿El conductor de tierra de protección debe llevar protección?" ] }
+  ];
+
+  function setupComponentes() {
+    const out = document.getElementById("out-cmp");
+    if (!out) return;
+    document.querySelectorAll("#cmp-list [data-pregunta]").forEach((b) => {
+      b.addEventListener("click", async () => {
+        out.innerHTML = "";
+        await consultarYrender(b.dataset.pregunta, out);
+        out.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
     });
   }
 
@@ -525,7 +579,8 @@
     view.innerHTML = views[r]();
     window.scrollTo(0, 0);
     // pestaña activa (sub-vistas de cálculo marcan "calculos")
-    const tabRoute = (r === "calc-a" || r === "calc-b" || r === "calc-c" || r === "calc-d" || r === "calc-e") ? "calculos" : r;
+    const tabRoute = (r === "calc-a" || r === "calc-b" || r === "calc-c" || r === "calc-d" || r === "calc-e") ? "calculos"
+      : (r === "componentes") ? "inicio" : r;
     tabs.forEach(t => t.setAttribute("aria-current", t.dataset.route === tabRoute ? "page" : "false"));
     if (r === "calc-a") setupCalcA();
     if (r === "calc-e") setupCalcE();
@@ -533,6 +588,7 @@
     if (r === "calc-c") setupCalcC();
     if (r === "calc-d") setupCalcD();
     if (r === "normativa") setupNormativa();
+    if (r === "componentes") setupComponentes();
     if (topTabs[r]) { try { Sync.Local.set("lastRoute", r); } catch {} }
   }
 
