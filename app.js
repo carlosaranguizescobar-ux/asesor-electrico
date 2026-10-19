@@ -8,6 +8,7 @@
 
   let syncMode = "local";
   let corrienteGuardada = null; // Id a traspasar de A -> B
+  let potenciaGuardada = null;  // potencia [W] a traspasar de Demanda -> Corriente nominal
 
   // ---------- Estado de conexión ----------
   function renderStatus() {
@@ -81,6 +82,11 @@
         <button class="tile" data-route="calc-a">
           <span class="ico">⚡</span>
           <span class="body"><strong>Corriente nominal</strong><span>Monofásica y trifásica</span></span>
+          <span class="chev">›</span>
+        </button>
+        <button class="tile" data-route="calc-e">
+          <span class="ico">💡</span>
+          <span class="body"><strong>Demanda de alumbrado</strong><span>Factores RIC N°03 (Tabla 3.1)</span></span>
           <span class="chev">›</span>
         </button>
         <button class="tile" data-route="calc-b">
@@ -163,6 +169,25 @@
         <div id="out-d"></div>`;
     },
 
+    "calc-e"() {
+      const opts = Object.entries(window.Calc.DEMANDA_TIPOS).map(([k, v]) => `<option value="${k}">${esc(v.label)}</option>`).join("");
+      return `
+        <button class="back" data-route="calculos">‹ Cálculos</button>
+        <h1>Demanda de alumbrado</h1>
+        <p class="lead">Aplica los factores de demanda del RIC N°03 (Tabla 3.1) a la potencia instalada de alumbrado, por tramos.</p>
+        <form id="form-e" class="form">
+          <label>Tipo de consumidor
+            <select name="tipo">${opts}</select>
+          </label>
+          <label>Potencia instalada de alumbrado [kW]
+            <input name="potencia_kW" type="number" inputmode="decimal" step="any" min="0" placeholder="ej. 8" required>
+          </label>
+          <button type="submit" class="btn">Calcular demanda</button>
+        </form>
+        <p class="note">Solo para alimentadores de alumbrado. No aplica a subalimentadores ni a circuitos finales (RIC N°03, 6.3).</p>
+        <div id="out-e"></div>`;
+    },
+
     "calc-a"() {
       return `
         <button class="back" data-route="calculos">‹ Cálculos</button>
@@ -175,7 +200,7 @@
             </select>
           </label>
           <label>Potencia [W]
-            <input name="potencia_W" type="number" inputmode="decimal" step="any" min="0" placeholder="ej. 2200" required>
+            <input name="potencia_W" type="number" inputmode="decimal" step="any" min="0" value="${potenciaGuardada != null ? Math.round(potenciaGuardada) : ""}" placeholder="ej. 2200" required>
           </label>
           <label>Tensión [V]
             <input name="tension_V" type="number" inputmode="decimal" step="any" min="0" value="230">
@@ -334,6 +359,22 @@
     });
   }
 
+  function setupCalcE() {
+    const form = document.getElementById("form-e");
+    if (!form) return;
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const res = window.Calc.demandaAlumbrado(leerForm(form));
+      if (res.ok) {
+        res.headline = "Demanda: " + res.demanda_kW.toFixed(2) + " kW";
+        res.extraHtml = `<button class="btn ghost" id="usar-en-a">Usar esta demanda en «Corriente nominal» ›</button>`;
+      }
+      document.getElementById("out-e").innerHTML = bloqueResultado(res);
+      const usar = document.getElementById("usar-en-a");
+      if (usar) usar.addEventListener("click", () => { potenciaGuardada = res.demanda_kW * 1000; go("calc-a"); });
+    });
+  }
+
   function poblarMetodos() {
     const R = window.RIC04;
     const selTipo = document.getElementById("sel-tipo");
@@ -484,9 +525,10 @@
     view.innerHTML = views[r]();
     window.scrollTo(0, 0);
     // pestaña activa (sub-vistas de cálculo marcan "calculos")
-    const tabRoute = (r === "calc-a" || r === "calc-b" || r === "calc-c" || r === "calc-d") ? "calculos" : r;
+    const tabRoute = (r === "calc-a" || r === "calc-b" || r === "calc-c" || r === "calc-d" || r === "calc-e") ? "calculos" : r;
     tabs.forEach(t => t.setAttribute("aria-current", t.dataset.route === tabRoute ? "page" : "false"));
     if (r === "calc-a") setupCalcA();
+    if (r === "calc-e") setupCalcE();
     if (r === "calc-b") setupCalcB();
     if (r === "calc-c") setupCalcC();
     if (r === "calc-d") setupCalcD();

@@ -262,5 +262,55 @@ window.Calc = (function () {
     };
   }
 
-  return { corrienteNominal, seccionPorCapacidad, caidaTension, dimensionarSeccion };
+  // ---------- E) Demanda de alumbrado (RIC N°03, Tabla 3.1 / punto 6.3) ----------
+  // Factores por tramos acumulativos sobre la potencia instalada de alumbrado.
+  // Solo para alimentadores de alumbrado; NO aplica a subalimentadores ni circuitos finales.
+  const DEMANDA_TIPOS = {
+    casa:       { label: "Casa habitación",                brackets: [[0, 3, 1.0], [3, 120, 0.35], [120, Infinity, 0.25]] },
+    hospital:   { label: "Hospitales",                     brackets: [[0, 50, 0.4], [50, Infinity, 0.2]] },
+    hotel:      { label: "Hoteles y moteles",              brackets: [[0, 20, 0.5], [20, 100, 0.4], [100, Infinity, 0.3]] },
+    bodega:     { label: "Bodegas",                        brackets: [[0, 12.5, 1.0], [12.5, Infinity, 0.5]] },
+    servicios:  { label: "Servicios comunes",              brackets: [[0, Infinity, 1.0]] },
+    comercial:  { label: "Locales comerciales y oficinas", brackets: [[0, 50, 1.0], [50, Infinity, 0.8]] },
+    otro:       { label: "Todo otro tipo",                 brackets: [[0, Infinity, 1.0]] }
+  };
+
+  function demandaAlumbrado({ tipo, potencia_kW }) {
+    const P = Number(potencia_kW);
+    const t = DEMANDA_TIPOS[tipo];
+    const errs = [];
+    if (!(P > 0)) errs.push("La potencia instalada debe ser mayor que 0.");
+    if (!t) errs.push("Tipo de consumidor no válido.");
+    if (errs.length) return { ok: false, errores: errs };
+
+    let demanda = 0;
+    const tramos = [];
+    for (const [lo, hi, f] of t.brackets) {
+      if (P > lo) {
+        const w = Math.min(P, hi) - lo;
+        const aporte = w * f;
+        demanda += aporte;
+        const rango = hi === Infinity ? ("sobre " + lo) : (lo === 0 ? ("primeros " + hi) : (lo + " a " + hi));
+        tramos.push({ rango, potencia: w, factor: f, aporte });
+      }
+    }
+
+    const datos = {
+      "Tipo de consumidor": t.label,
+      "Potencia instalada (alumbrado)": P + " kW"
+    };
+    tramos.forEach((tr) => {
+      datos["Tramo " + tr.rango + " [kW]"] = tr.potencia.toFixed(2) + " × " + tr.factor + " = " + tr.aporte.toFixed(2) + " kW";
+    });
+
+    return {
+      ok: true,
+      demanda_kW: demanda,
+      formula: "Demanda = Σ (potencia de cada tramo × su factor)",
+      datos,
+      referencia: "RIC N°03, Tabla 3.1 y punto 6.3 (alimentadores de alumbrado). Exigencia normativa. No aplica a subalimentadores ni a circuitos finales."
+    };
+  }
+
+  return { corrienteNominal, seccionPorCapacidad, caidaTension, dimensionarSeccion, demandaAlumbrado, DEMANDA_TIPOS };
 })();
