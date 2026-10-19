@@ -1,5 +1,5 @@
 /* Service worker: red primero (actualiza solo cuando hay internet), caché como respaldo offline. */
-const CACHE = "asesor-electrico-v0.6.0";
+const CACHE = "asesor-electrico-v0.6.1";
 const ASSETS = [
   "./",
   "./index.html",
@@ -39,9 +39,10 @@ self.addEventListener("fetch", (e) => {
   // Solo gestionamos nuestro propio origen.
   if (url.origin !== self.location.origin) return;
 
-  // Red primero: trae lo último si hay internet; si falla, usa la caché (offline).
+  // Red primero, SIN usar la caché HTTP del navegador (no-store), para que
+  // siempre llegue la última versión. Si no hay internet, usa la caché del SW.
   e.respondWith(
-    fetch(req).then((res) => {
+    fetch(req, { cache: "no-store" }).then((res) => {
       if (res && res.status === 200) {
         const copy = res.clone();
         caches.open(CACHE).then((c) => c.put(req, copy));
