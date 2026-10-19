@@ -321,7 +321,7 @@
           </label>
           <button type="submit" class="btn" id="n-btn">Consultar</button>
         </form>
-        <p class="note">Fuentes: Decreto 8, RIC N°03/04/10/14/17 (normativa), guía Bticino (fabricante) y ABC Enríquez Harper (literatura mexicana — verificar contra el RIC).</p>
+        <p class="note">Fuentes: Decreto 8, RIC N°03/04/06/10/14/17 (normativa), guía Bticino (fabricante) y ABC Enríquez Harper (literatura mexicana — verificar contra el RIC).</p>
         <div id="out-n"></div>`;
     },
 
