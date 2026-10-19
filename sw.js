@@ -1,5 +1,5 @@
-/* Service worker: la app abre y los cálculos corren sin señal. */
-const CACHE = "asesor-electrico-v0.5.0";
+/* Service worker: red primero (actualiza solo cuando hay internet), caché como respaldo offline. */
+const CACHE = "asesor-electrico-v0.5.1";
 const ASSETS = [
   "./",
   "./index.html",
@@ -33,22 +33,20 @@ self.addEventListener("fetch", (e) => {
   if (req.method !== "GET") return;
   const url = new URL(req.url);
 
-  // Las llamadas a Supabase / IA siempre van a la red (datos frescos); nunca se cachean.
-  if (url.hostname.endsWith("supabase.co") || url.pathname.includes("/functions/")) {
-    return; // deja pasar a la red por defecto
-  }
+  // Supabase / IA: siempre a la red, nunca se cachea.
+  if (url.hostname.endsWith("supabase.co") || url.pathname.includes("/functions/")) return;
 
-  // App shell: primero caché, luego red (y cachea lo nuevo del mismo origen).
+  // Solo gestionamos nuestro propio origen.
+  if (url.origin !== self.location.origin) return;
+
+  // Red primero: trae lo último si hay internet; si falla, usa la caché (offline).
   e.respondWith(
-    caches.match(req).then((hit) => {
-      if (hit) return hit;
-      return fetch(req).then((res) => {
-        if (res && res.status === 200 && url.origin === self.location.origin) {
-          const copy = res.clone();
-          caches.open(CACHE).then((c) => c.put(req, copy));
-        }
-        return res;
-      }).catch(() => hit);
-    })
+    fetch(req).then((res) => {
+      if (res && res.status === 200) {
+        const copy = res.clone();
+        caches.open(CACHE).then((c) => c.put(req, copy));
+      }
+      return res;
+    }).catch(() => caches.match(req).then((hit) => hit || caches.match("./index.html")))
   );
 });
