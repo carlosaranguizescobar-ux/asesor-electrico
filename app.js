@@ -68,7 +68,7 @@
         <div class="card">
           <div class="kv"><span>Base de la app (Bloque 1)</span><span>✅ Lista</span></div>
           <div class="kv"><span>Instalable y offline</span><span>✅ Sí</span></div>
-          <div class="kv"><span>Cálculos (corriente, demanda, sección, caída)</span><span>✅ Listos</span></div>
+          <div class="kv"><span>Cálculos (corriente, demanda, sección, caída, puesta a tierra)</span><span>✅ Listos</span></div>
           <div class="kv"><span>Consulta normativa con IA</span><span>✅ Lista</span></div>
           <div class="kv"><span>Componentes (selector guiado)</span><span>✅ Listo</span></div>
         </div>`;
@@ -101,6 +101,11 @@
         <button class="tile" data-route="calc-c">
           <span class="ico">📉</span>
           <span class="body"><strong>Caída de tensión</strong><span>RIC N°03 y N°14</span></span>
+          <span class="chev">›</span>
+        </button>
+        <button class="tile" data-route="calc-f">
+          <span class="ico">⏚</span>
+          <span class="body"><strong>Resistencia de puesta a tierra</strong><span>Estimación RIC N°06 (Tablas 6.3 y 6.4)</span></span>
           <span class="chev">›</span>
         </button>`;
     },
@@ -190,6 +195,35 @@
         </form>
         <p class="note">Solo para alimentadores de alumbrado. No aplica a subalimentadores ni a circuitos finales (RIC N°03, 6.3).</p>
         <div id="out-e"></div>`;
+    },
+
+    "calc-f"() {
+      const elecOpts = Object.entries(window.Calc.ELECTRODOS)
+        .map(([k, v]) => `<option value="${k}">${esc(v.label)}</option>`).join("");
+      const rhoOpts = Object.entries(window.Calc.RESISTIVIDAD)
+        .map(([k, v]) => `<option value="${k}">${esc(v.label)} — ${v.rho} Ω·m</option>`).join("")
+        + `<option value="otro">Otro (ingresar ρ)</option>`;
+      return `
+        <button class="back" data-route="calculos">‹ Cálculos</button>
+        <h1>Resistencia de puesta a tierra</h1>
+        <p class="lead">Estimación orientativa de la resistencia del electrodo (RIC N°06, Tabla 6.4). Debe comprobarse midiendo en terreno.</p>
+        <form id="form-f" class="form">
+          <label>Tipo de electrodo
+            <select name="electrodo" id="f-elec">${elecOpts}</select>
+          </label>
+          <label><span id="f-dim-text">Longitud de la pica L [m]</span>
+            <input name="dimension_m" type="number" inputmode="decimal" step="any" min="0" placeholder="ej. 1.5" required>
+          </label>
+          <label>Terreno / resistividad ρ
+            <select name="resistividad" id="f-rho">${rhoOpts}</select>
+          </label>
+          <label id="f-rho-manual" style="display:none">Resistividad ρ [Ω·m]
+            <input name="rho_manual" type="number" inputmode="decimal" step="any" min="0" placeholder="ej. 120">
+          </label>
+          <button type="submit" class="btn">Estimar resistencia</button>
+        </form>
+        <p class="note">Resistividades orientativas (RIC N°06, Tabla 6.3, punto 8.13). Todo sistema de puesta a tierra debe medirse y comprobarse en terreno al poner en servicio (punto 9.2).</p>
+        <div id="out-f"></div>`;
     },
 
     "calc-a"() {
@@ -394,6 +428,36 @@
     });
   }
 
+  function setupCalcF() {
+    const form = document.getElementById("form-f");
+    if (!form) return;
+    const elec = document.getElementById("f-elec");
+    const dimText = document.getElementById("f-dim-text");
+    const rho = document.getElementById("f-rho");
+    const rhoManual = document.getElementById("f-rho-manual");
+    const textos = {
+      pica: "Longitud de la pica L [m]",
+      placa: "Perímetro de la placa P [m]",
+      conductor: "Longitud del conductor L [m]"
+    };
+    const syncDim = () => { dimText.textContent = textos[elec.value] || "Largo / perímetro [m]"; };
+    syncDim();
+    elec.addEventListener("change", syncDim);
+    rho.addEventListener("change", () => { rhoManual.style.display = rho.value === "otro" ? "" : "none"; });
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const res = window.Calc.resistenciaTierra(leerForm(form));
+      if (res.ok) {
+        res.headline = "Resistencia estimada: " + res.resistencia_ohm.toFixed(2) + " Ω";
+        const v = res.cumpleServicio ? "verdict ok" : "verdict fail";
+        const t = res.cumpleServicio ? "✓ ≤ 20 Ω" : "✗ > 20 Ω";
+        res.extraHtml = `<div class="${v}">${t} — límite de referencia para tierra de servicio (RIC N°06, 6.1)`
+          + `<small>Estimación orientativa: confirma midiendo en terreno (punto 9.2). La tierra de protección admite otro valor según la protección asociada (punto 7.3).</small></div>`;
+      }
+      document.getElementById("out-f").innerHTML = bloqueResultado(res);
+    });
+  }
+
   function poblarMetodos() {
     const R = window.RIC04;
     const selTipo = document.getElementById("sel-tipo");
@@ -579,7 +643,7 @@
     view.innerHTML = views[r]();
     window.scrollTo(0, 0);
     // pestaña activa (sub-vistas de cálculo marcan "calculos")
-    const tabRoute = (r === "calc-a" || r === "calc-b" || r === "calc-c" || r === "calc-d" || r === "calc-e") ? "calculos"
+    const tabRoute = (r === "calc-a" || r === "calc-b" || r === "calc-c" || r === "calc-d" || r === "calc-e" || r === "calc-f") ? "calculos"
       : (r === "componentes") ? "inicio" : r;
     tabs.forEach(t => t.setAttribute("aria-current", t.dataset.route === tabRoute ? "page" : "false"));
     if (r === "calc-a") setupCalcA();
@@ -587,6 +651,7 @@
     if (r === "calc-b") setupCalcB();
     if (r === "calc-c") setupCalcC();
     if (r === "calc-d") setupCalcD();
+    if (r === "calc-f") setupCalcF();
     if (r === "normativa") setupNormativa();
     if (r === "componentes") setupComponentes();
     if (topTabs[r]) { try { Sync.Local.set("lastRoute", r); } catch {} }

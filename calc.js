@@ -312,5 +312,55 @@ window.Calc = (function () {
     };
   }
 
-  return { corrienteNominal, seccionPorCapacidad, caidaTension, dimensionarSeccion, demandaAlumbrado, DEMANDA_TIPOS };
+  // ---------- F) Resistencia de puesta a tierra (RIC N°06, Tablas 6.3 y 6.4) ----------
+  // Estimación orientativa de R según el tipo de electrodo:
+  //   Pica vertical:                   R = ρ / L
+  //   Placa enterrada:                 R = 0,8 · ρ / P
+  //   Conductor enterrado horizontal:  R = 2 · ρ / L
+  // ρ en Ω·m (Tabla 6.3 u otro valor ingresado); L o P en metros.
+  const RESISTIVIDAD = {
+    cultivable:  { label: "Terrenos cultivables y fértiles; terraplenes compactos y húmedos", rho: 50 },
+    poco_fertil: { label: "Terraplenes cultivables poco fértiles y otros terraplenes",         rho: 500 },
+    pedregoso:   { label: "Suelos pedregosos desnudos; arenas secas permeables",               rho: 3000 }
+  };
+  const ELECTRODOS = {
+    pica:      { label: "Pica vertical",                     dimLabel: "Longitud de la pica L",     formula: "R = ρ / L",       calc: (rho, x) => rho / x },
+    placa:     { label: "Placa enterrada",                   dimLabel: "Perímetro de la placa P",   formula: "R = 0,8 · ρ / P", calc: (rho, x) => 0.8 * rho / x },
+    conductor: { label: "Conductor enterrado horizontalmente", dimLabel: "Longitud del conductor L", formula: "R = 2 · ρ / L",   calc: (rho, x) => 2 * rho / x }
+  };
+
+  function resistenciaTierra({ electrodo, dimension_m, resistividad, rho_manual }) {
+    const e = ELECTRODOS[electrodo];
+    const x = Number(dimension_m);
+    let rho = null, rhoLabel = "";
+    if (resistividad === "otro") {
+      rho = Number(rho_manual); rhoLabel = "ingresada manualmente";
+    } else if (RESISTIVIDAD[resistividad]) {
+      rho = RESISTIVIDAD[resistividad].rho; rhoLabel = RESISTIVIDAD[resistividad].label + " (Tabla 6.3)";
+    }
+
+    const errs = [];
+    if (!e) errs.push("Tipo de electrodo no válido.");
+    if (!(x > 0)) errs.push("El largo/perímetro debe ser mayor que 0.");
+    if (!(rho > 0)) errs.push("La resistividad ρ debe ser mayor que 0.");
+    if (errs.length) return { ok: false, errores: errs };
+
+    const Rt = e.calc(rho, x);
+    const LIM_SERVICIO = 20; // RIC N°06, punto 6.1
+    const datos = { "Tipo de electrodo": e.label, "Resistividad ρ": rho + " Ω·m (" + rhoLabel + ")" };
+    datos[e.dimLabel] = x + " m";
+    datos["Resistencia estimada R"] = Rt.toFixed(2) + " Ω";
+
+    return {
+      ok: true,
+      resistencia_ohm: Rt,
+      limServicio: LIM_SERVICIO,
+      cumpleServicio: Rt <= LIM_SERVICIO,
+      formula: e.formula,
+      datos,
+      referencia: "RIC N°06 — Tabla 6.4 (fórmulas) y Tabla 6.3 (resistividad). Exigencia normativa. Los valores de resistividad son orientativos (punto 8.13) y todo SPT debe medirse y comprobarse en terreno al momento de la puesta en servicio (punto 9.2). Límite de referencia: tierra de servicio ≤ 20 Ω (punto 6.1)."
+    };
+  }
+
+  return { corrienteNominal, seccionPorCapacidad, caidaTension, dimensionarSeccion, demandaAlumbrado, resistenciaTierra, DEMANDA_TIPOS, RESISTIVIDAD, ELECTRODOS };
 })();
